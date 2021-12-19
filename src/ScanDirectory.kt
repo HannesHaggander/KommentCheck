@@ -16,14 +16,27 @@ class ScanDirectory(private val directoryFilePath: String) {
                 System.err.println("Failed to find directory on path $directoryFilePath\n$err")
             }
             .onSuccess { directory ->
-                findKotlinFiles(directory)
+                var kotlinFiles = findKotlinFiles(directory)
+                if(kotlinFiles.isEmpty()) {
+                    return@onSuccess
+                }
+                kotlinFiles
                     .map { kotlinFile -> findPublicFunctions(kotlinFile) }
                     .flatten()
                     .let { missingComments ->
-                        println("public functions with missing comments: ${missingComments.size}")
+                        val filesWithMissingComments = missingComments.distinctBy { it.filePath }
+                        val percentageMissing = calculatePercentageOfOccurrences(
+                            filesWithMissingComments.size.toFloat(),
+                            kotlinFiles.size.toFloat()
+                        )
+                        println("public functions with missing comments: ${missingComments.size} ($percentageMissing%)")
                         missingComments.forEach(::println)
                     }
             }
+    }
+
+    private fun calculatePercentageOfOccurrences(occurrences: Float, fullSetSize: Float): Float {
+        return occurrences.div(fullSetSize).times(100f)
     }
 
     private fun findKotlinFiles(rootScanDirectory: File): List<File> = rootScanDirectory
@@ -33,7 +46,6 @@ class ScanDirectory(private val directoryFilePath: String) {
 
     private fun findPublicFunctions(file: File): List<FunctionWithMissingComment> {
         with(file.readLines()) {
-
             return mapIndexedNotNull { index, line ->
                 val aboveLineIndex = index - 1
                 if (aboveLineIndex < 0) {
